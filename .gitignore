@@ -1,8 +1,10 @@
 # 大文件/设备相关（不入库）
-wheel/
+wheel/*
+!wheel/.gitkeep
 yolo11n.engine
 yolo11n.onnx
-videos/
+videos/*
+!videos/.gitkeep
 
 # Python
 __pycache__/

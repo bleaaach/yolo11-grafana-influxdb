@@ -19,11 +19,36 @@
 
 ### 1. 环境要求
 
-- Docker
-- Docker Compose
-- NVIDIA GPU（可选，用于加速推理）
+- Docker & Docker Compose
+- **NVIDIA Jetson**（推荐，已在 Jetson Orin/AGX 上验证）
+  - 需安装 NVIDIA Container Runtime（`nvidia-docker2` 或 `docker-compose` >= 2.x）
+- 或 x86 机器（需修改 `docker-compose.yml`，见[非 Jetson 部署](#非-jetson-x86-部署)）
 
-### 2. 启动服务
+### 2. 准备 PyTorch wheel 文件（Jetson 必须）
+
+Jetson 需从本地 wheel 安装 PyTorch（aarch64 + CUDA 版本），标准 PyPI 无法提供：
+
+```bash
+# 方式一：从 Jetson AI Lab PyPI 下载（需联网）
+pip download torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 \
+  --index-url https://pypi.jetson-ai-lab.dev/jp6/cu126 \
+  --dest wheel/ \
+  --no-deps \
+  -f https://pypi.jetson-ai-lab.dev/jp6/cu126
+
+# 方式二：直接访问 NVIDIA 下载页面获取
+# https://developer.nvidia.com/embedded/downloads
+```
+
+确认以下文件存在：
+```
+wheel/
+├── torch-2.7.0-cp310-cp310-linux_aarch64.whl
+├── torchvision-0.22.0-cp310-cp310-linux_aarch64.whl
+└── torchaudio-2.7.0-cp310-cp310-linux_aarch64.whl
+```
+
+### 3. 启动服务
 
 ```bash
 cd yolo11_grafana_influxdb
@@ -121,9 +146,22 @@ curl -s -u admin:admin http://localhost:3001/api/health
 
 ### 修改视频源
 
-1. 将视频文件放入 `videos` 目录
-2. 修改 `docker-compose.yml` 中的 `VIDEO_SOURCE` 环境变量
-3. 重启服务：`docker-compose restart yolo11-app`
+**使用摄像头（默认）：**
+```bash
+# docker-compose.yml 中
+VIDEO_SOURCE=0        # 第一个 USB 摄像头
+VIDEO_SOURCE=1        # 第二个 USB 摄像头
+```
+
+**使用视频文件：**
+1. 将视频文件放入 `videos/` 目录（需自行创建）
+2. 在 `docker-compose.yml` 中取消注释视频挂载：
+   ```yaml
+   - ./videos:/app/videos:ro
+   ```
+3. 修改 `VIDEO_SOURCE=/app/videos/your_video.mp4`
+4. 注释掉 `devices:` 下的摄像头 passthrough
+5. 重启：`docker-compose restart yolo11-app`
 
 ### 修改 InfluxDB Token
 
@@ -146,12 +184,25 @@ curl -s -u admin:admin http://localhost:3001/api/dashboards/uid/yolo11-realtime 
 
 - `influxdb-data`: InfluxDB 数据
 - `grafana-data`: Grafana 数据和配置
-- `yolo11-model`: 模型文件
 
 删除数据卷命令：
 ```bash
 docker-compose down -v
 ```
+
+## 非 Jetson (x86) 部署
+
+在标准 x86 机器上运行需修改 `docker-compose.yml`：
+
+1. **移除 Jetson 专属挂载**（`/usr/local/cuda`、`/usr/lib/aarch64-linux-gnu`、`/usr/lib/python3.10/dist-packages` 三行 volumes）
+2. **移除 Jetson 专属环境变量**（`NVIDIA_VISIBLE_DEVICES`、`NVIDIA_DRIVER_CAPABILITIES`、`LD_LIBRARY_PATH`、`PYTHONPATH`）
+3. **修改 Dockerfile** 改为从 PyPI 安装 PyTorch：
+   ```dockerfile
+   # 替换本地 wheel 安装为网络安装
+   RUN pip install --no-cache-dir torch torchvision torchaudio \
+       --index-url https://download.pytorch.org/whl/cu118
+   ```
+4. 如使用摄像头，确认摄像头设备路径（`/dev/video0` 等）
 
 ## 故障排除
 
@@ -202,11 +253,15 @@ curl -s -X POST http://localhost:8086/api/v2/query?org=jetson \
 yolo11_grafana_influxdb/
 ├── docker-compose.yml          # Docker Compose 配置
 ├── Dockerfile                  # YOLO11 应用镜像
-├── requirements.txt            # Python 依赖
+├── .env.example                # 环境变量示例（cp .env.example .env）
+├── requirements.txt            # Python 依赖（本地运行用）
 ├── yolo11n_grafana.py         # 主程序
-├── yolo11n.pt                 # YOLO11n 模型权重
-├── videos/                    # 视频目录
-│   └── people-detection.mp4   # 示例视频
+├── yolo11n.pt                 # YOLO11n 模型权重（已入库）
+├── wheel/                     # Jetson PyTorch wheel（需自行下载，见上方说明）
+│   ├── torch-2.7.0-cp310-cp310-linux_aarch64.whl
+│   ├── torchvision-0.22.0-cp310-cp310-linux_aarch64.whl
+│   └── torchaudio-2.7.0-cp310-cp310-linux_aarch64.whl
+├── videos/                    # 视频目录（gitignored，需自行创建和放置视频）
 ├── influxdb/
 │   └── init/                  # InfluxDB 初始化脚本
 ├── grafana/

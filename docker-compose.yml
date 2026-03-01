@@ -34,6 +34,7 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -49,26 +50,43 @@ services:
 
   # YOLO11n Person Detection App
   yolo11-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # 方式A：使用预构建镜像（推荐，别人无需 wheel 文件）
+    image: crpi-z7h4oz0xl00q2129.cn-hangzhou.personal.cr.aliyuncs.com/lorraine-jetson/yolo11-jetson:latest
+    # 方式B：本地构建（需要 wheel/ 目录中有 PyTorch wheel 文件）
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: yolo11-app
     ports:
       - "5001:5000"
     volumes:
-      - ./videos:/app/videos:ro
+      # TensorRT engine (device-specific, optional - app falls back to yolo11n.pt)
+      # Generate on Jetson: yolo export model=yolo11n.pt format=engine device=0
       - ./yolo11n.engine:/app/yolo11n.engine:ro
+      # === Jetson-only: host CUDA/TensorRT libraries passthrough ===
+      # Remove these 3 lines if running on a standard x86 machine
       - /usr/local/cuda:/usr/local/cuda:ro
       - /usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu:ro
       - /usr/lib/python3.10/dist-packages:/usr/lib/python3.10/dist-packages:ro
+      # === Optional: mount local video files ===
+      # Uncomment to use video files instead of webcam
+      # - ./videos:/app/videos:ro
+    devices:
+      # USB camera passthrough (comment out if using a video file)
+      # Change /dev/video0 to /dev/video1 etc. if using a different camera
+      - /dev/video0:/dev/video0
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=XcOGuS__bo4NKPEk0zBYlOBIRrhMXlufMaaVLgmFMObXts_mCF-43kgUWhHGKtQfTEuPITWcB57eI32qlGy5TA==
       - INFLUX_ORG=jetson
       - INFLUX_BUCKET=person_detection
-      - VIDEO_SOURCE=/app/videos/people-detection.mp4
-      - DEVICE=0
+      # VIDEO_SOURCE: 0 = first USB webcam, or /app/videos/xxx.mp4 for video file
+      - VIDEO_SOURCE=0
+      # DEVICE: auto (detect GPU), cpu, or 0/1/... (GPU index)
+      - DEVICE=auto
       - WEB_PORT=5000
+      # === Jetson-only: NVIDIA runtime env vars ===
+      # Remove on x86 if not using nvidia-docker
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu
