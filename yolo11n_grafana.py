@@ -21,6 +21,7 @@ runtime_state = {
     "frame_idx": 0,
     "source": "",
     "person_count": 0,
+    "total_visitors": 0,
     "avg_confidence": 0.0,
     "confidences": [],
     "centers": [],
@@ -109,7 +110,7 @@ class InfluxDBSender:
             print(f"发送数据失败: {e}")
             return False
 
-    def send_all(self, count, avg_confidence, timestamp=None):
+    def send_all(self, count, avg_confidence, total_visitors, timestamp=None):
         """合并写入 person_count 和 detection_details，减少网络往返"""
         if self.write_api is None:
             return False
@@ -117,7 +118,8 @@ class InfluxDBSender:
             p1 = Point("person_count") \
                 .tag("source", "yolo11n_camera") \
                 .tag("device", "jetson") \
-                .field("count", int(count))
+                .field("count", int(count)) \
+                .field("total_visitors", int(total_visitors))
             p2 = Point("detection_details") \
                 .tag("source", "yolo11n_camera") \
                 .tag("device", "jetson") \
@@ -310,12 +312,17 @@ def main():
     last_send_time = time.time()
     start_time = last_send_time
     last_status_send = last_send_time
-    
+
     last_person_count = 0
     last_confidences = []
     last_centers = []
     last_frame = None
-    
+
+    # 今日累计人流
+    total_visitors = 0
+    prev_person_count = 0
+    last_day = time.localtime().tm_mday
+
     try:
         frame_skip = 0
         frame_count = 0
@@ -412,17 +419,26 @@ def main():
                 avg_conf = sum(confidences) / len(confidences) if confidences else 0
                 write_timestamp = int(current_time * 1e9)
 
-                # 合并成单次写入：person_count + avg_confidence 一起发
+                # 累计今日人流：人数增加时计入新增量；每天零点重置
+                current_day = time.localtime().tm_mday
+                if current_day != last_day:
+                    total_visitors = 0
+                    last_day = current_day
+                if person_count > prev_person_count:
+                    total_visitors += (person_count - prev_person_count)
+                prev_person_count = person_count
+
                 write_start = time.time()
-                influx.send_all(person_count, avg_conf, timestamp=write_timestamp)
+                influx.send_all(person_count, avg_conf, total_visitors, timestamp=write_timestamp)
                 write_latency = (time.time() - write_start) * 1000
-                
+
                 last_send_time = current_time
                 with state_lock:
                     runtime_state["ts"] = current_time
                     runtime_state["frame_idx"] = int(camera.cap.get(cv2.CAP_PROP_POS_FRAMES))
                     runtime_state["source"] = str(args.source)
                     runtime_state["person_count"] = int(person_count)
+                    runtime_state["total_visitors"] = int(total_visitors)
                     runtime_state["avg_confidence"] = float(avg_conf) if confidences else 0.0
                     runtime_state["confidences"] = [float(c) for c in confidences]
                     runtime_state["centers"] = [(int(x), int(y)) for (x, y) in centers]
