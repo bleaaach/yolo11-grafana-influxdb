@@ -1,0 +1,5 @@
+ultralytics
+influxdb-client
+opencv-python
+flask
+numpy<2

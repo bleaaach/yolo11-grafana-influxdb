@@ -1,0 +1,86 @@
+{
+  "dashboard": {
+    "title": "YOLO11n 实时",
+    "uid": "yolo11-realtime",
+    "refresh": "1s",
+    "time": {
+      "from": "now-1m",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "当前人数",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"person_detection\") |> range(start: -3s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> last()"
+          }
+        ],
+        "datasource": {
+          "type": "influxdb",
+          "uid": "efeimzhcjmghsa"
+        }
+      },
+      {
+        "id": 2,
+        "title": "实时人数趋势",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 18,
+          "x": 6,
+          "y": 0
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 200ms, fn: last, createEmpty: false) |> yield(name: \"last\")"
+          }
+        ],
+        "datasource": {
+          "type": "influxdb",
+          "uid": "efeimzhcjmghsa"
+        }
+      },
+      {
+        "id": 3,
+        "title": "视频流",
+        "type": "text",
+        "gridPos": {
+          "h": 16,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "options": {
+          "content": "<iframe src=\"http://192.168.137.144:5001/video_feed\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius: 8px;\"></iframe>",
+          "mode": "html"
+        }
+      },
+      {
+        "id": 4,
+        "title": "Debug",
+        "type": "text",
+        "gridPos": {
+          "h": 16,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "options": {
+          "content": "<iframe src=\"http://192.168.137.144:5001/debug\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius: 8px;\"></iframe>",
+          "mode": "html"
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

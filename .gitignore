@@ -1,0 +1,19 @@
+# 大文件/设备相关（不入库）
+wheel/
+yolo11n.engine
+yolo11n.onnx
+videos/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# 运行时日志
+*.log
+nohup.out
+
+# Docker volumes数据
+grafana_data/
+influxdb_data/
