@@ -1,194 +1,191 @@
 {
-  "dashboard": {
-    "title": "YOLO11n 实时监控",
-    "uid": "yolo11-realtime",
-    "refresh": "5s",
-    "time": { "from": "now-1h", "to": "now" },
-    "timezone": "browser",
-    "panels": [
-      {
-        "id": 1,
-        "title": "当前人数",
-        "type": "gauge",
-        "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
-        "targets": [{
-          "refId": "A",
-          "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-          "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> last()"
-        }],
+  "title": "YOLO11n 实时监控",
+  "uid": "yolo11-realtime",
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "当前人数",
+      "type": "gauge",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+      "targets": [{
+        "refId": "A",
         "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "options": {
-          "reduceOptions": { "calcs": ["lastNotNull"] },
-          "orientation": "auto",
-          "showThresholdLabels": false,
-          "showThresholdMarkers": true
-        },
-        "fieldConfig": {
-          "defaults": {
-            "min": 0, "max": 20,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                { "color": "green", "value": null },
-                { "color": "yellow", "value": 5 },
-                { "color": "red", "value": 10 }
-              ]
-            },
-            "color": { "mode": "thresholds" },
-            "unit": "short",
-            "displayName": "人数"
-          }
-        }
+        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> last()"
+      }],
+      "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
       },
-      {
-        "id": 2,
-        "title": "今日人流",
-        "type": "stat",
-        "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
-        "targets": [{
-          "refId": "A",
-          "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-          "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"total_visitors\") |> last()"
-        }],
-        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "options": {
-          "reduceOptions": { "calcs": ["lastNotNull"] },
-          "colorMode": "background",
-          "graphMode": "none",
-          "textMode": "auto"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": { "mode": "fixed", "fixedColor": "blue" },
-            "unit": "short",
-            "displayName": "今日累计"
-          }
-        }
-      },
-      {
-        "id": 3,
-        "title": "平均置信度",
-        "type": "gauge",
-        "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
-        "targets": [{
-          "refId": "A",
-          "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-          "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"detection_details\") |> filter(fn: (r) => r._field == \"avg_confidence\") |> last()"
-        }],
-        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "options": {
-          "reduceOptions": { "calcs": ["lastNotNull"] },
-          "orientation": "auto",
-          "showThresholdLabels": false,
-          "showThresholdMarkers": true
-        },
-        "fieldConfig": {
-          "defaults": {
-            "min": 0, "max": 1,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                { "color": "red", "value": null },
-                { "color": "yellow", "value": 0.5 },
-                { "color": "green", "value": 0.75 }
-              ]
-            },
-            "color": { "mode": "thresholds" },
-            "unit": "percentunit",
-            "displayName": "置信度"
-          }
-        }
-      },
-      {
-        "id": 4,
-        "title": "持续运行时间",
-        "type": "stat",
-        "gridPos": { "h": 5, "w": 4, "x": 12, "y": 0 },
-        "targets": [{
-          "refId": "A",
-          "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-          "query": "from(bucket: \"person_detection\") |> range(start: -30s) |> filter(fn: (r) => r._measurement == \"app_status\") |> filter(fn: (r) => r._field == \"uptime_seconds\") |> last()"
-        }],
-        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "options": {
-          "reduceOptions": { "calcs": ["lastNotNull"] },
-          "colorMode": "value",
-          "graphMode": "none",
-          "textMode": "auto"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": { "mode": "fixed", "fixedColor": "text" },
-            "unit": "s",
-            "displayName": "运行时长"
-          }
-        }
-      },
-      {
-        "id": 5,
-        "title": "实时人数趋势",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-        "targets": [{
-          "refId": "A",
-          "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-          "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 1s, fn: last, createEmpty: false) |> yield(name: \"last\")"
-        }],
-        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "fieldConfig": {
-          "defaults": {
-            "color": { "mode": "palette-classic" },
-            "custom": { "lineWidth": 2, "fillOpacity": 10 },
-            "displayName": "人数"
-          }
-        },
-        "options": { "tooltip": { "mode": "single" } }
-      },
-      {
-        "id": 6,
-        "title": "高峰时段（每小时最大人数）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
-        "targets": [{
-          "refId": "A",
-          "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-          "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 1h, fn: max, createEmpty: false) |> yield(name: \"max\")"
-        }],
-        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "fieldConfig": {
-          "defaults": {
-            "color": { "mode": "continuous-GrYlRd" },
-            "custom": { "lineWidth": 2, "fillOpacity": 20, "gradientMode": "scheme" },
-            "displayName": "每小时峰值",
-            "unit": "short"
-          }
-        },
-        "options": {
-          "tooltip": { "mode": "single" },
-          "legend": { "displayMode": "list", "placement": "bottom" }
-        }
-      },
-      {
-        "id": 7,
-        "title": "视频流",
-        "type": "text",
-        "gridPos": { "h": 14, "w": 12, "x": 0, "y": 13 },
-        "options": {
-          "content": "<iframe src=\"http://192.168.137.144:5001/video_feed\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius: 8px;\"></iframe>",
-          "mode": "html"
-        }
-      },
-      {
-        "id": 8,
-        "title": "Debug",
-        "type": "text",
-        "gridPos": { "h": 14, "w": 12, "x": 12, "y": 13 },
-        "options": {
-          "content": "<iframe src=\"http://192.168.137.144:5001/debug\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius: 8px;\"></iframe>",
-          "mode": "html"
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 20,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "displayName": "人数"
         }
       }
-    ]
-  },
-  "overwrite": true
+    },
+    {
+      "id": 2,
+      "title": "今日人流",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "targets": [{
+        "refId": "A",
+        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"total_visitors\") |> last()"
+      }],
+      "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "unit": "short",
+          "displayName": "今日累计"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "平均置信度",
+      "type": "gauge",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
+      "targets": [{
+        "refId": "A",
+        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"detection_details\") |> filter(fn: (r) => r._field == \"avg_confidence\") |> last()"
+      }],
+      "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.75 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "displayName": "置信度"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "持续运行时间",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 0 },
+      "targets": [{
+        "refId": "A",
+        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+        "query": "from(bucket: \"person_detection\") |> range(start: -30s) |> filter(fn: (r) => r._measurement == \"app_status\") |> filter(fn: (r) => r._field == \"uptime_seconds\") |> last()"
+      }],
+      "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "text" },
+          "unit": "s",
+          "displayName": "运行时长"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "实时人数趋势",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "targets": [{
+        "refId": "A",
+        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+        "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 1s, fn: last, createEmpty: false) |> yield(name: \"last\")"
+      }],
+      "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "displayName": "人数"
+        }
+      },
+      "options": { "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 6,
+      "title": "高峰时段（每小时最大人数）",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
+      "targets": [{
+        "refId": "A",
+        "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+        "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 1h, fn: max, createEmpty: false) |> yield(name: \"max\")"
+      }],
+      "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "continuous-GrYlRd" },
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "gradientMode": "scheme" },
+          "displayName": "每小时峰值",
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 7,
+      "title": "视频流",
+      "type": "text",
+      "gridPos": { "h": 14, "w": 12, "x": 0, "y": 13 },
+      "options": {
+        "content": "<iframe src=\"http://192.168.6.99:5001/video_feed\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius: 8px;\"></iframe>",
+        "mode": "html"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Debug",
+      "type": "text",
+      "gridPos": { "h": 14, "w": 12, "x": 12, "y": 13 },
+      "options": {
+        "content": "<iframe src=\"http://192.168.6.99:5001/debug\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius: 8px;\"></iframe>",
+        "mode": "html"
+      }
+    }
+  ]
 }

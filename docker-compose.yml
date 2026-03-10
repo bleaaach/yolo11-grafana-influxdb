@@ -63,28 +63,42 @@ services:
       # TensorRT engine (device-specific, optional - app falls back to yolo11n.pt)
       # Generate on Jetson: yolo export model=yolo11n.pt format=engine device=0
       - ./yolo11n.engine:/app/yolo11n.engine:ro
+      - ./yolo11n_grafana.py:/app/yolo11n_grafana.py:ro
       # === Jetson-only: host CUDA/TensorRT libraries passthrough ===
       # Remove these 3 lines if running on a standard x86 machine
       - /usr/local/cuda:/usr/local/cuda:ro
-      - /usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu:ro
+      - /usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu
       - /usr/lib/python3.10/dist-packages:/usr/lib/python3.10/dist-packages:ro
       # === Optional: mount local video files ===
       # Uncomment to use video files instead of webcam
       # - ./videos:/app/videos:ro
     devices:
-      # USB camera passthrough (comment out if using a video file)
+      # USB camera passthrough (comment out if using a video file or GMSL)
       # Change /dev/video0 to /dev/video1 etc. if using a different camera
       - /dev/video0:/dev/video0
+      # === GMSL camera: uncomment the video devices your GMSL cameras expose ===
+      # - /dev/video1:/dev/video1
+      # - /dev/video2:/dev/video2
+      # - /dev/video3:/dev/video3
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=XcOGuS__bo4NKPEk0zBYlOBIRrhMXlufMaaVLgmFMObXts_mCF-43kgUWhHGKtQfTEuPITWcB57eI32qlGy5TA==
       - INFLUX_ORG=jetson
       - INFLUX_BUCKET=person_detection
       # VIDEO_SOURCE: 0 = first USB webcam, or /app/videos/xxx.mp4 for video file
+      # For GMSL: set to camera index (0,1,2,3) and set CAMERA_TYPE=gmsl
       - VIDEO_SOURCE=0
+      # CAMERA_TYPE: auto/usb/gmsl/argus/gst
+      # gmsl  = GMSL camera via v4l2src GStreamer pipeline
+      # argus = CSI/GMSL via nvarguscamerasrc (NVIDIA Argus)
+      # auto  = try V4L2 first, fallback to GMSL GStreamer
+      - CAMERA_TYPE=gmsl
       # DEVICE: auto (detect GPU), cpu, or 0/1/... (GPU index)
       - DEVICE=auto
       - WEB_PORT=5000
+      # Performance tuning
+      - IMGSZ=480
+      - FRAME_SKIP=2
       # === Jetson-only: NVIDIA runtime env vars ===
       # Remove on x86 if not using nvidia-docker
       - NVIDIA_VISIBLE_DEVICES=all

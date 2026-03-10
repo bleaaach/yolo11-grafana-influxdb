@@ -14,16 +14,17 @@ echo "检测到宿主机 IP: $HOST_IP"
 # 复制配置文件模板并替换 IP
 echo "配置 Grafana 数据源..."
 
-# 创建数据源配置
+# 创建数据源配置（使用 Docker 内部网络名 influxdb，UID 必须与 dashboard JSON 匹配）
 mkdir -p grafana/provisioning/datasources
 cat > grafana/provisioning/datasources/datasources.yml << EOF
 apiVersion: 1
 
 datasources:
   - name: InfluxDBJetson
+    uid: efeimzhcjmghsa
     type: influxdb
     access: proxy
-    url: http://${HOST_IP}:8086
+    url: http://influxdb:8086
     isDefault: true
     jsonData:
       defaultBucket: person_detection
