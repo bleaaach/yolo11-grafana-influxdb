@@ -76,14 +76,13 @@ def generate(cam_id):
             time.sleep(0.005)
             continue
         last_frame = frame
-        frame_copy = frame.copy()
-        (flag, encodedImage) = cv2.imencode(".jpg", frame_copy, encode_params)
+        (flag, encodedImage) = cv2.imencode(".jpg", frame, encode_params)
         if not flag:
             continue
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n'
                b'Cache-Control: no-store\r\n\r\n' +
-               bytearray(encodedImage) + b'\r\n')
+               encodedImage.tobytes() + b'\r\n')
 
 
 @app.route("/video_feed/<cam_id>")
@@ -292,6 +291,11 @@ class HeatmapGenerator:
         kernel = (kernel - kernel.min()) / (kernel.max() - kernel.min() + 1e-6)
         self.kernel = kernel.astype(np.float32)
         self.half = ksize_scaled // 2
+        # Pre-allocate reusable buffers (avoid per-frame allocation ~240 times/sec)
+        self._float_buf = np.zeros((self.hh, self.hw), dtype=np.float32)
+        self._norm_buf = np.zeros((self.hh, self.hw), dtype=np.uint8)
+        self._full_buf = np.zeros((height, width, 3), dtype=np.uint8)
+        self._out_buf = np.zeros((height, width, 3), dtype=np.uint8)
 
     def update(self, centers):
         self.heatmap *= self.decay
@@ -313,10 +317,14 @@ class HeatmapGenerator:
         np.clip(self.heatmap, 0, 1.0, out=self.heatmap)
 
     def apply_to_frame(self, frame):
-        heatmap_norm = (self.heatmap * 255).astype(np.uint8)
-        heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_JET)
-        heatmap_full = cv2.resize(heatmap_color, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
-        return cv2.addWeighted(frame, 1 - self.alpha, heatmap_full, self.alpha, 0)
+        np.multiply(self.heatmap, 255, out=self._float_buf)
+        np.copyto(self._norm_buf, self._float_buf, casting='unsafe')
+        heatmap_color = cv2.applyColorMap(self._norm_buf, cv2.COLORMAP_JET)
+        cv2.resize(heatmap_color, (self.width, self.height),
+                   dst=self._full_buf, interpolation=cv2.INTER_LINEAR)
+        cv2.addWeighted(frame, 1 - self.alpha, self._full_buf, self.alpha, 0,
+                        dst=self._out_buf)
+        return self._out_buf
 
 
 class CentroidTracker:
@@ -657,6 +665,8 @@ class Camera:
             with self._bg_lock:
                 self._bg_ret = ret
                 self._bg_frame = frame
+            if not ret:
+                time.sleep(0.01)
 
     def read(self):
         if self.cap is None:
@@ -696,6 +706,14 @@ def inference_worker(model, cameras_dict, device, half, imgsz, infer_results, in
     last_fps_time = time.time()
     last_gc_time = time.time()
 
+    # Check CUDA availability once
+    _has_cuda = False
+    try:
+        import torch
+        _has_cuda = torch.cuda.is_available()
+    except Exception:
+        pass
+
     while running_flag[0]:
         cam_id = cam_ids[idx]
         idx = (idx + 1) % n
@@ -718,8 +736,10 @@ def inference_worker(model, cameras_dict, device, half, imgsz, infer_results, in
             for box in r.boxes:
                 count += 1
                 confidences.append(float(box.conf[0]))
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-                centers.append(((x1 + x2) // 2, (y1 + y2) // 2))
+                xyxy = box.xyxy[0]
+                cx = int((xyxy[0].item() + xyxy[2].item()) / 2)
+                cy = int((xyxy[1].item() + xyxy[3].item()) / 2)
+                centers.append((cx, cy))
         del results
 
         with infer_locks[cam_id]:
@@ -744,14 +764,18 @@ def inference_worker(model, cameras_dict, device, half, imgsz, infer_results, in
             frame_counts = {cid: 0 for cid in cam_ids}
             last_fps_time = now
 
-        if now - last_gc_time >= 60:
+        if now - last_gc_time >= 30:
             gc.collect()
-            try:
-                import torch
-                if torch.cuda.is_available():
+            if _has_cuda:
+                try:
+                    import torch
                     torch.cuda.empty_cache()
-            except Exception:
-                pass
+                except Exception:
+                    pass
+            # Clear YOLO predictor cache to prevent memory accumulation
+            if hasattr(model, 'predictor') and model.predictor is not None:
+                if hasattr(model.predictor, 'results'):
+                    model.predictor.results = None
             last_gc_time = now
 
 
@@ -769,8 +793,12 @@ def display_loop(cam_id, camera, infer_result, infer_lock, influx, args,
 
     disp_count = 0
     last_disp_fps_time = time.time()
+    last_gc_time = time.time()
     TARGET_DT = 1.0 / 30.0
     prev_raw_centers = None  # 仅在推理结果变化时更新 tracker
+
+    # Pre-allocate display frame buffer
+    _small_buf = np.zeros((stream_h, stream_w, 3), dtype=np.uint8)
 
     while running_flag[0]:
         t_loop = time.time()
@@ -780,7 +808,8 @@ def display_loop(cam_id, camera, infer_result, infer_lock, influx, args,
             time.sleep(0.01)
             continue
 
-        small = cv2.resize(frame, (stream_w, stream_h), interpolation=cv2.INTER_LINEAR)
+        cv2.resize(frame, (stream_w, stream_h), dst=_small_buf,
+                   interpolation=cv2.INTER_LINEAR)
         del frame
 
         with infer_lock:
@@ -802,19 +831,19 @@ def display_loop(cam_id, camera, infer_result, infer_lock, influx, args,
                 by1 = max(0, cy - stream_h // 15)
                 bx2 = min(stream_w, cx + stream_w // 20)
                 by2 = min(stream_h, cy + stream_h // 15)
-                roi = small[by1:by2, bx1:bx2]
+                roi = _small_buf[by1:by2, bx1:bx2]
                 if roi.size > 0:
-                    small[by1:by2, bx1:bx2] = cv2.GaussianBlur(roi, (31, 31), 10)
-                cv2.rectangle(small, (bx1, by1), (bx2, by2), (0, 255, 0), 2)
+                    _small_buf[by1:by2, bx1:bx2] = cv2.GaussianBlur(roi, (31, 31), 10)
+                cv2.rectangle(_small_buf, (bx1, by1), (bx2, by2), (0, 255, 0), 2)
 
         heatmap_gen.update(centers)
-        disp = heatmap_gen.apply_to_frame(small)
+        disp = heatmap_gen.apply_to_frame(_small_buf)
 
         cv2.putText(disp, f"{cam_id} | Persons: {person_count} | Visitors: {tracker.total_visitors}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         with frame_locks[cam_id]:
-            output_frames[cam_id] = disp
+            output_frames[cam_id] = disp.copy()
 
         if not args.headless:
             try:
@@ -863,6 +892,11 @@ def display_loop(cam_id, camera, infer_result, infer_lock, influx, args,
                 runtime_states[cam_id]["performance"]["display_fps"] = round(disp_fps, 1)
             disp_count = 0
             last_disp_fps_time = current_time
+
+        # Periodic GC to prevent memory fragmentation
+        if current_time - last_gc_time >= 60:
+            gc.collect()
+            last_gc_time = current_time
 
         elapsed = time.time() - t_loop
         sleep_t = TARGET_DT - elapsed
@@ -1038,6 +1072,24 @@ def main():
         print(f"[{cam_id}] 显示线程已启动")
 
     print(f"所有线程已启动，{len(camera_ids)} 个摄像头运行中")
+
+    # --- Memory monitoring thread ---
+    def _mem_monitor():
+        while running_flag[0]:
+            try:
+                with open('/proc/self/status') as f:
+                    for line in f:
+                        if line.startswith('VmRSS:'):
+                            rss_kb = int(line.split()[1])
+                            rss_mb = rss_kb / 1024
+                            print(f"[内存] RSS: {rss_mb:.0f} MB")
+                            break
+            except Exception:
+                pass
+            time.sleep(300)  # every 5 minutes
+
+    mem_t = threading.Thread(target=_mem_monitor, daemon=True)
+    mem_t.start()
 
     # --- Main thread: wait for Ctrl-C ---
     try:

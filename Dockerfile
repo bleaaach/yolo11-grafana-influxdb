@@ -32,13 +32,15 @@ RUN pip install --no-cache-dir \
     /tmp/torchaudio-2.7.0-cp310-cp310-linux_aarch64.whl \
     && rm /tmp/*.whl
 
-# 安装其他依赖
+# 安装其他依赖（含 onnx，用于首次启动导出 TensorRT engine）
 RUN pip install --no-cache-dir \
     ultralytics \
     influxdb-client \
     flask \
     werkzeug \
-    "numpy<2"
+    "numpy<2" \
+    "onnx>=1.12.0,<2.0.0" \
+    onnxslim
 
 # 拷贝应用文件
 COPY yolo11n_grafana.py /app/

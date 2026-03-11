@@ -1,4 +1,4 @@
-FROM grafana/grafana:latest
+FROM grafana/grafana:10.4.15
 
 # 将仪表盘和数据源配置打包进镜像，客户无需挂载宿主机文件
 COPY grafana/provisioning/datasources/ /etc/grafana/provisioning/datasources/
