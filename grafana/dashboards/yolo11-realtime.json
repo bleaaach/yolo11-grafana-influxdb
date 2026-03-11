@@ -1,6 +1,7 @@
 {
   "title": "YOLO11n 实时监控",
-  "uid": "yolo11-realtime",
+  "uid": "yolo11-realtime-v2",
+  "version": 1,
   "refresh": "5s",
   "time": { "from": "now-1h", "to": "now" },
   "timezone": "browser",
@@ -13,7 +14,7 @@
       "targets": [{
         "refId": "A",
         "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> last()"
+        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> group(columns: [\"camera\"]) |> last() |> group() |> sum()"
       }],
       "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
       "options": {
@@ -47,7 +48,7 @@
       "targets": [{
         "refId": "A",
         "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"total_visitors\") |> last()"
+        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"total_visitors\") |> group(columns: [\"camera\"]) |> last() |> group() |> sum()"
       }],
       "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
       "options": {
@@ -72,7 +73,7 @@
       "targets": [{
         "refId": "A",
         "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"detection_details\") |> filter(fn: (r) => r._field == \"avg_confidence\") |> last()"
+        "query": "from(bucket: \"person_detection\") |> range(start: -5s) |> filter(fn: (r) => r._measurement == \"detection_details\") |> filter(fn: (r) => r._field == \"avg_confidence\") |> group(columns: [\"camera\"]) |> last() |> group() |> mean()"
       }],
       "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
       "options": {
@@ -125,20 +126,19 @@
     },
     {
       "id": 5,
-      "title": "实时人数趋势",
+      "title": "实时人数趋势（按摄像头）",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
       "targets": [{
         "refId": "A",
         "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 1s, fn: last, createEmpty: false) |> yield(name: \"last\")"
+        "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\" and r._field == \"count\" and exists r.camera) |> aggregateWindow(every: 5s, fn: last, createEmpty: false)"
       }],
       "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 10 },
-          "displayName": "人数"
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
         }
       },
       "options": { "tooltip": { "mode": "single" } }
@@ -151,14 +151,13 @@
       "targets": [{
         "refId": "A",
         "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
-        "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\") |> filter(fn: (r) => r._field == \"count\") |> aggregateWindow(every: 1h, fn: max, createEmpty: false) |> yield(name: \"max\")"
+        "query": "from(bucket: \"person_detection\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"person_count\" and r._field == \"count\" and exists r.camera) |> aggregateWindow(every: 1h, fn: max, createEmpty: false)"
       }],
       "datasource": { "type": "influxdb", "uid": "efeimzhcjmghsa" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "continuous-GrYlRd" },
           "custom": { "lineWidth": 2, "fillOpacity": 20, "gradientMode": "scheme" },
-          "displayName": "每小时峰值",
           "unit": "short"
         }
       },
@@ -169,11 +168,21 @@
     },
     {
       "id": 7,
-      "title": "视频流",
+      "title": "Camera 0",
       "type": "text",
       "gridPos": { "h": 14, "w": 12, "x": 0, "y": 13 },
       "options": {
-        "content": "<div id=\"video-container\" style=\"width:100%;height:100%\"></div><script>document.getElementById('video-container').innerHTML='<iframe src=\"http://'+window.location.hostname+':5001/video_feed\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius:8px\"></iframe>';</script>",
+        "content": "<div id=\"video-cam0\" style=\"width:100%;height:100%\"></div><script>document.getElementById('video-cam0').innerHTML='<iframe src=\"http://'+window.location.hostname+':5001/video_feed/cam0\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius:8px\"></iframe>';</script>",
+        "mode": "html"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Camera 1",
+      "type": "text",
+      "gridPos": { "h": 14, "w": 12, "x": 12, "y": 13 },
+      "options": {
+        "content": "<div id=\"video-cam1\" style=\"width:100%;height:100%\"></div><script>document.getElementById('video-cam1').innerHTML='<iframe src=\"http://'+window.location.hostname+':5001/video_feed/cam1\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius:8px\"></iframe>';</script>",
         "mode": "html"
       }
     },
@@ -181,7 +190,7 @@
       "id": 8,
       "title": "Debug",
       "type": "text",
-      "gridPos": { "h": 14, "w": 12, "x": 12, "y": 13 },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 27 },
       "options": {
         "content": "<div id=\"debug-container\" style=\"width:100%;height:100%\"></div><script>document.getElementById('debug-container').innerHTML='<iframe src=\"http://'+window.location.hostname+':5001/debug\" width=\"100%\" height=\"100%\" frameborder=\"0\" style=\"border-radius:8px\"></iframe>';</script>",
         "mode": "html"

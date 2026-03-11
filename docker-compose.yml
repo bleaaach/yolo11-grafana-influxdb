@@ -59,14 +59,13 @@ services:
       - /usr/local/cuda:/usr/local/cuda:ro
       - /usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu
       - /usr/lib/python3.10/dist-packages:/usr/lib/python3.10/dist-packages:ro
-    devices:
-      - /dev/video0:/dev/video0
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=XcOGuS__bo4NKPEk0zBYlOBIRrhMXlufMaaVLgmFMObXts_mCF-43kgUWhHGKtQfTEuPITWcB57eI32qlGy5TA==
       - INFLUX_ORG=jetson
       - INFLUX_BUCKET=person_detection
-      - VIDEO_SOURCE=0
+      - VIDEO_SOURCE=auto
+      - MAX_CAMERAS=4
       - CAMERA_TYPE=auto
       - DEVICE=auto
       - WEB_PORT=5000
