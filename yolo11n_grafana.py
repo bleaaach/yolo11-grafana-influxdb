@@ -278,6 +278,18 @@ class Camera:
         self._bg_running = False
         self._bg_thread = None
 
+    @staticmethod
+    def _detect_camera_type(idx):
+        """通过 /sys/class/video4linux 的设备名自动判断摄像头类型"""
+        try:
+            with open(f"/sys/class/video4linux/video{idx}/name") as f:
+                name = f.read().strip().lower()
+            if "tegra" in name or "vi-output" in name or "nv_cam" in name:
+                return "gmsl"
+            return "usb"
+        except Exception:
+            return "usb"
+
     def _build_gstreamer_pipeline(self, idx):
         """根据 camera_type 构造 GStreamer pipeline"""
         if self.camera_type == "argus":
@@ -311,6 +323,12 @@ class Camera:
 
         # 数字索引 — 按 camera_type 选择打开方式
         idx = self.source
+        if self.camera_type == "auto":
+            # 自动检测摄像头类型
+            detected = self._detect_camera_type(idx)
+            print(f"自动检测摄像头类型: /dev/video{idx} → {detected}")
+            self.camera_type = detected
+
         if self.camera_type in ("gmsl", "argus"):
             pipeline = self._build_gstreamer_pipeline(idx)
             print(f"使用 {self.camera_type.upper()} GStreamer pipeline: {pipeline}")
@@ -318,16 +336,6 @@ class Camera:
             if not self.cap.isOpened():
                 print(f"GStreamer 打开失败，回退到 V4L2")
                 self.cap = cv2.VideoCapture(idx)
-        elif self.camera_type == "auto":
-            # 自动检测：优先尝试 V4L2，失败则尝试 GMSL GStreamer
-            self.cap = cv2.VideoCapture(idx)
-            if not self.cap.isOpened():
-                print(f"V4L2 /dev/video{idx} 打开失败，尝试 GMSL GStreamer...")
-                pipeline = self._build_gstreamer_pipeline(idx)
-                self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
-                if self.cap.isOpened():
-                    self.camera_type = "gmsl"
-                    print(f"GMSL GStreamer 打开成功")
         else:
             # usb 或其他
             self.cap = cv2.VideoCapture(idx)
@@ -336,8 +344,8 @@ class Camera:
             print(f"无法打开源: {self.source} (类型: {self.camera_type})")
             return False
 
-        # USB 摄像头设置参数
-        if self.camera_type in ("auto", "usb"):
+        # USB 摄像头设置分辨率（GMSL 使用原生分辨率，不强制设置避免不兼容）
+        if self.camera_type == "usb":
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             self.cap.set(cv2.CAP_PROP_FPS, self.fps)
@@ -454,8 +462,8 @@ def main():
     parser.add_argument('--camera-type', type=str, default=os.getenv("CAMERA_TYPE", "auto"),
                         choices=["auto", "usb", "gmsl", "argus", "gst"],
                         help='Camera type: auto/usb/gmsl/argus/gst (default: auto)')
-    parser.add_argument('--imgsz', type=int, default=int(os.getenv("IMGSZ", "480")),
-                        help='YOLO input size (smaller=faster, default: 480)')
+    parser.add_argument('--imgsz', type=int, default=int(os.getenv("IMGSZ", "640")),
+                        help='YOLO input size (smaller=faster, default: 640)')
     parser.add_argument('--stream-width', type=int, default=int(os.getenv("STREAM_WIDTH", "640")),
                         help='Display/stream width in pixels (default: 640); height derived from aspect ratio')
 
@@ -464,11 +472,16 @@ def main():
     # 初始化 InfluxDB
     influx = InfluxDBSender(args.influx_url, args.influx_token, args.influx_org, args.influx_bucket)
 
-    # 初始化 YOLO 模型，优先使用本地 TensorRT engine
+    # 初始化 YOLO 模型，优先级：环境变量 > /app/models/engine > 本地engine > .pt
+    env_model = os.getenv("YOLO_MODEL")
     script_dir = os.path.dirname(os.path.abspath(__file__))
     engine_path = os.path.join(script_dir, 'yolo11n.engine')
     pt_path = os.path.join(script_dir, 'yolo11n.pt')
-    if os.path.exists('/app/yolo11n.engine'):
+    if env_model and os.path.exists(env_model):
+        model_path = env_model
+    elif os.path.exists('/app/models/yolo11n.engine'):
+        model_path = '/app/models/yolo11n.engine'
+    elif os.path.exists('/app/yolo11n.engine'):
         model_path = '/app/yolo11n.engine'
     elif os.path.exists(engine_path):
         model_path = engine_path

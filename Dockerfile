@@ -43,12 +43,14 @@ RUN pip install --no-cache-dir \
 # 拷贝应用文件
 COPY yolo11n_grafana.py /app/
 COPY yolo11n.pt /app/
+COPY entrypoint.sh /app/
 
-RUN mkdir -p /app/videos
+RUN mkdir -p /app/videos /app/models \
+    && chmod +x /app/entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5000
 
-ENTRYPOINT ["python", "yolo11n_grafana.py"]
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["--headless"]

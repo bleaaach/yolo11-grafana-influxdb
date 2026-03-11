@@ -1,0 +1,6 @@
+FROM grafana/grafana:latest
+
+# 将仪表盘和数据源配置打包进镜像，客户无需挂载宿主机文件
+COPY grafana/provisioning/datasources/ /etc/grafana/provisioning/datasources/
+COPY grafana/provisioning/dashboards/ /etc/grafana/provisioning/dashboards/
+COPY grafana/dashboards/ /etc/grafana/dashboards/
