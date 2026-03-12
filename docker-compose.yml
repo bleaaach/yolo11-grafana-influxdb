@@ -24,7 +24,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Grafana Visualization Dashboard（仪表盘和数据源已打包进镜像）
+  # Grafana Visualization Dashboard
   grafana:
     image: crpi-z7h4oz0xl00q2129.cn-hangzhou.personal.cr.aliyuncs.com/lorraine-jetson/yolo11-grafana:latest
     container_name: yolo11-grafana
@@ -55,7 +55,7 @@ services:
     volumes:
       # TensorRT engine 持久化（首次启动自动生成，后续复用）
       - yolo-models:/app/models
-      - /home/seeed/yolo11_grafana_influxdb/yolo11n_grafana.py:/app/yolo11n_grafana.py:ro
+      - ./yolo11n_grafana.py:/app/yolo11n_grafana.py:ro
       # === Jetson-only: host CUDA/TensorRT libraries passthrough ===
       - /usr/local/cuda:/usr/local/cuda:ro
       - /usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu

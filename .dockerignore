@@ -8,7 +8,7 @@ wheel/torchvision-0.23.0*.whl
 *.onnx
 videos/
 influxdb/
-grafana/
+grafana/provisioning/dashboards/yolo11n-dashboard.json.bak
 docs/
 scripts/
 __pycache__/

@@ -14,8 +14,21 @@ import glob as globmod
 from flask import Flask, Response, jsonify
 import json
 
+# 尝试导入 TurboJPEG（可选，用于加速推流编码）
+try:
+    from turbojpeg import TurboJPEG
+    TURBOJPEG_AVAILABLE = True
+except ImportError:
+    TURBOJPEG_AVAILABLE = False
+    TurboJPEG = None
+
 # Flask app for streaming
 app = Flask(__name__)
+
+# --- Global streaming config (set in main) ---
+STREAM_QUALITY = 40
+STREAM_SKIP_FRAMES = 2
+turbo_jpeg = None  # TurboJPEG 实例（如果可用）
 
 # --- Per-camera state (keyed by cam_id, e.g. "cam0", "cam1") ---
 output_frames = {}       # cam_id -> latest display frame (numpy array)
@@ -61,21 +74,43 @@ def _init_camera_state(cam_id):
 # ---- Flask video stream ------------------------------------------------
 
 def generate(cam_id):
-    last_frame = None
-    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 75]
+    last_frame_id = None
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, STREAM_QUALITY]
     lock = frame_locks.get(cam_id)
     if lock is None:
         return
+
+    frame_counter = 0
+
     while True:
         with lock:
             frame = output_frames.get(cam_id)
         if frame is None:
             time.sleep(0.02)
             continue
-        if frame is last_frame:
+        fid = id(frame)
+        if fid == last_frame_id:
             time.sleep(0.005)
             continue
-        last_frame = frame
+        last_frame_id = fid
+        frame_counter += 1
+
+        # 跳帧优化：减少编码压力
+        if STREAM_SKIP_FRAMES > 1 and frame_counter % STREAM_SKIP_FRAMES != 0:
+            continue
+
+        # 尝试使用 TurboJPEG（比 OpenCV 快 2-4 倍）
+        if turbo_jpeg is not None:
+            try:
+                jpeg_bytes = turbo_jpeg.encode(frame, quality=STREAM_QUALITY)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n'
+                       b'Cache-Control: no-store\r\n\r\n' +
+                       jpeg_bytes + b'\r\n')
+                continue
+            except Exception:
+                pass  # 回退到 OpenCV
+
         (flag, encodedImage) = cv2.imencode(".jpg", frame, encode_params)
         if not flag:
             continue
@@ -467,13 +502,6 @@ class CentroidTracker:
         self.inactive_ts.clear()
         self.pending.clear()
         self.next_id += 1
-
-    @property
-    def total_visitors(self):
-        return len(self.seen_ids)
-
-    def reset_daily(self):
-        self.seen_ids.clear()
 
 
 # ---- Camera class (with discover_cameras) ----------------------------------
