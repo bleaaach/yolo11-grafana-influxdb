@@ -55,6 +55,7 @@ services:
     volumes:
       # TensorRT engine 持久化（首次启动自动生成，后续复用）
       - yolo-models:/app/models
+      - /home/seeed/yolo11_grafana_influxdb/yolo11n_grafana.py:/app/yolo11n_grafana.py:ro
       # === Jetson-only: host CUDA/TensorRT libraries passthrough ===
       - /usr/local/cuda:/usr/local/cuda:ro
       - /usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu
@@ -65,7 +66,7 @@ services:
       - INFLUX_ORG=jetson
       - INFLUX_BUCKET=person_detection
       - VIDEO_SOURCE=auto
-      - MAX_CAMERAS=4
+      - MAX_CAMERAS=6
       - CAMERA_TYPE=auto
       - DEVICE=auto
       - WEB_PORT=5000

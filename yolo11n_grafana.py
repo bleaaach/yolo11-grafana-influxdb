@@ -481,6 +481,12 @@ class CentroidTracker:
 class Camera:
     """支持 USB 摄像头、GMSL/CSI 摄像头（通过 GStreamer）和视频文件"""
 
+    USB_PIPELINE = (
+        "v4l2src device=/dev/video{idx} ! "
+        "image/jpeg,width={w},height={h},framerate={fps}/1 ! "
+        "jpegdec ! videoconvert ! video/x-raw,format=BGR ! "
+        "appsink max-buffers=1 drop=true sync=false"
+    )
     GMSL_PIPELINE = (
         "v4l2src device=/dev/video{idx} ! "
         "video/x-raw,format=YUYV,width={w},height={h},framerate={fps}/1 ! "
@@ -542,15 +548,8 @@ class Camera:
                 time.sleep(0.1)
         cap.release()
 
-        # 2) 回退到直接 V4L2（许多 Jetson GMSL 摄像头支持）
-        cap = cv2.VideoCapture(idx)
-        if cap.isOpened():
-            ret, _ = cap.read()
-            cap.release()
-            if ret:
-                return True
-        else:
-            cap.release()
+        # GMSL 设备 GStreamer 失败则直接跳过，不回退 V4L2
+        # （V4L2 回退会误判无摄像头接入的 CSI 节点为可用）
         return False
 
     @staticmethod
@@ -601,6 +600,8 @@ class Camera:
     def _build_gstreamer_pipeline(self, idx):
         if self.camera_type == "argus":
             return self.ARGUS_PIPELINE.format(idx=idx, w=self.width, h=self.height, fps=self.fps)
+        elif self.camera_type == "usb":
+            return self.USB_PIPELINE.format(idx=idx, w=self.width, h=self.height, fps=self.fps)
         else:
             return self.GMSL_PIPELINE.format(idx=idx, w=self.width, h=self.height, fps=self.fps)
 
@@ -638,6 +639,26 @@ class Camera:
             if not self.cap.isOpened():
                 print(f"GStreamer 打开失败，回退到 V4L2")
                 self.cap = cv2.VideoCapture(idx)
+        elif self.camera_type == "usb":
+            # 优先用 GStreamer MJPG pipeline（appsink drop=true 避免帧积压）
+            pipeline = self._build_gstreamer_pipeline(idx)
+            print(f"USB GSTREAMER pipeline: {pipeline}")
+            self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            if not self.cap.isOpened():
+                # 回退到 V4L2 + MJPG
+                print("GStreamer 打开失败，回退到 V4L2 MJPG")
+                self.cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+                if self.cap.isOpened():
+                    self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                    self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+                    actual_fps = self.cap.get(cv2.CAP_PROP_FPS)
+                    actual_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    actual_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    print(f"USB V4L2 MJPG: {actual_w}x{actual_h} @ {actual_fps:.0f}fps")
+                else:
+                    self.cap = cv2.VideoCapture(idx)
         else:
             self.cap = cv2.VideoCapture(idx)
 
@@ -645,10 +666,6 @@ class Camera:
             print(f"无法打开源: {self.source} (类型: {self.camera_type})")
             return False
 
-        if self.camera_type == "usb":
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            self.cap.set(cv2.CAP_PROP_FPS, self.fps)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if self.camera_type != "file":
             self._start_bg_reader()

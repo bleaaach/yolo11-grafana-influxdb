@@ -7,7 +7,7 @@ WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装系统依赖
+# 安装系统依赖（含 GStreamer，用于 USB 摄像头低延迟采集）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-dev \
@@ -17,6 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libopenblas-dev \
     curl \
+    python3-opencv \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-tools \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && ln -sf /usr/bin/pip3 /usr/bin/pip
@@ -33,14 +40,16 @@ RUN pip install --no-cache-dir \
     && rm /tmp/*.whl
 
 # 安装其他依赖（含 onnx，用于首次启动导出 TensorRT engine）
-RUN pip install --no-cache-dir \
-    ultralytics \
+# opencv 用系统包（python3-opencv），自带 GStreamer 支持，不用 pip 版本
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ \
+    "ultralytics[export]" \
     influxdb-client \
     flask \
     werkzeug \
     "numpy<2" \
     "onnx>=1.12.0,<2.0.0" \
-    onnxslim
+    onnxslim \
+    && pip uninstall -y opencv-python opencv-python-headless 2>/dev/null || true
 
 # 拷贝应用文件
 COPY yolo11n_grafana.py /app/
